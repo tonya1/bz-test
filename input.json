@@ -13,6 +13,18 @@
       "houses" : 0
     },
     {
+      "fdr" : "ieee123ts",
+      "fdrid" : "_6B3B8DF7-4F84-431C-9FA8-68B08E00CD05",
+      "capacitors" : 4,
+      "houses" : 0
+    },
+    {
+      "fdr" : "ieee123transactive",
+      "fdrid" : "_503D6E20-F499-4CC7-8051-971E23D0BF79",
+      "capacitors" : 4,
+      "houses" : 0
+    },
+    {
       "fdr" : "ieee13nodeckt",
       "fdrid" : "_49AD8E07-3BF9-A4E2-CB8F-C3722F837B62",
       "capacitors" : 2,

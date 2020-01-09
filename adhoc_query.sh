@@ -2,67 +2,43 @@
 
 docker_image=$1
 
-#docker_image="gridappsd/blazegraph:develop"
 
-[ ! -d log ] && mkdir log
-
-logfile=log/$( echo $docker_image | sed 's:/:_:g').log.$$
-touch $logfile
-
-fdrs=" ieee123 _C1C3E687-6FFD-C753-582B-632A27E28507 \n
-ieee123pv _E407CBB6-8C8D-9BC9-589C-AB83FBF0826D \n
-ieee13nodeckt _49AD8E07-3BF9-A4E2-CB8F-C3722F837B62 \n
-ieee13nodecktassets _5B816B93-7A5F-B64C-8460-47C17D6E4B0F \n
-ieee8500 _4F76A5F9-271D-9EB8-5E31-AA362D86F2C3 \n
-j1 _67AB291F-DCCD-31B7-B499-338206B9828F \n
-ieee123transactive _503D6E20-F499-4CC7-8051-971E23D0BF79 \n
-test9500new _AAE94E4A-2465-6F5E-37B1-3E72183A4E44 \n
-acep_psil _77966920-E1EC-EE8A-23EE-4EFD23B205BD \n
-sourceckt _9CE150A8-8CC5-A0F9-B67E-BBD8C79D3095 "
-
-#  Generating measurements files for ieee123 _C1C3E687-6FFD-C753-582B-632A27E28507
-#  Generating measurements files for ieee123pv _E407CBB6-8C8D-9BC9-589C-AB83FBF0826D
-#  Generating measurements files for ieee13nodeckt _49AD8E07-3BF9-A4E2-CB8F-C3722F837B62
-#  Generating measurements files for ieee13nodecktassets _5B816B93-7A5F-B64C-8460-47C17D6E4B0F
-#  Generating measurements files for ieee8500 _4F76A5F9-271D-9EB8-5E31-AA362D86F2C3
-#  Generating measurements files for j1 _67AB291F-DCCD-31B7-B499-338206B9828F
-#  Generating measurements files for ieee123transactive _503D6E20-F499-4CC7-8051-971E23D0BF79
-#  Generating measurements files for test9500new _AAE94E4A-2465-6F5E-37B1-3E72183A4E44
-#  Generating measurements files for acep_psil _77966920-E1EC-EE8A-23EE-4EFD23B205BD
-#  Generating measurements files for sourceckt _9CE150A8-8CC5-A0F9-B67E-BBD8C79D3095
-
-
-get_breakers() {
+get_query() {
   myfdrid=$1
 query="
-# list measurement points for Breakers, Reclosers, LoadBreakSwitches in a selected feeder
-PREFIX r:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX c:  <http://iec.ch/TC57/CIM100#>
-SELECT ?cimtype ?name ?bus1 ?bus2 ?id (group_concat(distinct ?phs;separator=\"\") as ?phases) WHERE {
-  SELECT ?cimtype ?name ?bus1 ?bus2 ?phs ?id WHERE {
- VALUES ?fdrid {\"${myfdrid}\"} 
- VALUES ?cimraw {c:LoadBreakSwitch c:Recloser c:Breaker}
- ?fdr c:IdentifiedObject.mRID ?fdrid.
- ?s r:type ?cimraw.
-  bind(strafter(str(?cimraw),\"#\") as ?cimtype)
- ?s c:Equipment.EquipmentContainer ?fdr.
- ?s c:IdentifiedObject.name ?name.
- ?s c:IdentifiedObject.mRID ?id.
- ?t1 c:Terminal.ConductingEquipment ?s.
- ?t1 c:ACDCTerminal.sequenceNumber \"1\".
- ?t1 c:Terminal.ConnectivityNode ?cn1. 
- ?cn1 c:IdentifiedObject.name ?bus1.
- ?t2 c:Terminal.ConductingEquipment ?s.
- ?t2 c:ACDCTerminal.sequenceNumber \"2\".
- ?t2 c:Terminal.ConnectivityNode ?cn2. 
- ?cn2 c:IdentifiedObject.name ?bus2
-	OPTIONAL {?swp c:SwitchPhase.Switch ?s.
- 	?swp c:SwitchPhase.phaseSide1 ?phsraw.
-   	bind(strafter(str(?phsraw),\"SinglePhaseKind.\") as ?phs) }
- } ORDER BY ?name ?phs
+PREFIX r: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX c: <http://iec.ch/TC57/CIM100#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT ?inverter_mrid ?inverter_name ?inverter_mode ?inverter_max_q ?inverter_min_q ?inverter_p ?inverter_q ?inverter_rated_s ?inverter_rated_u ?phase_mrid ?phase_name ?phase_p ?phase_q (group_concat(distinct ?phs;separator=\"\n\") as ?phases)
+WHERE {
+VALUES ?feeder_mrid {\"_AAE94E4A-2465-6F5E-37B1-3E72183A4E44\"}
+?s r:type c:PowerElectronicsConnection.
+?s c:Equipment.EquipmentContainer ?fdr.
+?fdr c:IdentifiedObject.mRID ?feeder_mrid.
+?s c:IdentifiedObject.mRID ?inverter_mrid.
+?s c:IdentifiedObject.name ?inverter_name.
+?s c:PowerElectronicsConnection.p ?inverter_p.
+?s c:PowerElectronicsConnection.q ?inverter_q.
+?s c:PowerElectronicsConnection.ratedS ?inverter_rated_s.
+?s c:PowerElectronicsConnection.ratedU ?inverter_rated_u.
+OPTIONAL {
+?s c:PowerElectronicsConnection.inverterMode ?inverter_mode.
+?s c:PowerElectronicsConnection.maxQ ?inverter_max_q.
+?s c:PowerElectronicsConnection.minQ ?inverter_min_q.
 }
-GROUP BY ?cimtype ?name ?bus1 ?bus2 ?id
-ORDER BY ?cimtype ?name"
+OPTIONAL {
+?pecp c:PowerElectronicsConnectionPhase.PowerElectronicsConnection ?s.
+?pecp c:IdentifiedObject.mRID ?phase_mrid.
+?pecp c:IdentifiedObject.name ?phase_name.
+?pecp c:PowerElectronicsConnectionPhase.p ?phase_p.
+?pecp c:PowerElectronicsConnectionPhase.q ?phase_q.
+?pecp c:PowerElectronicsConnectionPhase.phase
+?phsraw bind(strafter(str(?phsraw),\"SinglePhaseKind.\") as ?phs)
+}
+}
+GROUP BY ?inverter_mrid ?inverter_name ?inverter_rated_s ?inverter_rated_u ?inverter_p ?inverter_q ?phase_mrid ?phase_name ?phase_p ?phase_q ?inverter_mode ?inverter_max_q ?inverter_min_q
+ORDER BY ?inverter_mrid
+"
  
   curl -s -X POST $endpoint --data-urlencode "query=$query" \
        -H 'Accept:application/json' \
@@ -189,23 +165,6 @@ WHERE {
 
 }
 
-#INPUT echo "{"
-#INPUT echo "  \"fdrs\" : ["
-#INPUT echo -e $fdrs | while read fdr fdrid; do
-  #INPUT capacitors=$(get_capacitors $fdrid)
-  #INPUT houses=$(get_houses $fdrid)
-  #INPUT echo "    {"
-  #INPUT echo "      \"$fdr\" : \"$fdr\","
-  #INPUT echo "      \"fdrid\" : \"$fdrid\","
-  #INPUT echo "      \"capacitors\" : $capacitors,"
-  #INPUT echo "      \"houses\" : $houses"
-  #INPUT echo "    },"
-#INPUT done 
-#INPUT echo "  ]"
-#INPUT echo "}"
-#INPUT 
-#INPUT exit
-
 ####################
 ###
 docker pull $docker_image 2> /dev/null
@@ -224,43 +183,7 @@ rangeCount=`curl -s -G -H 'Accept: application/xml' "${endpoint}" --data-urlenco
 echo " "
 echo "Blazegrpah rangeCount ($rangeCount)"
 
-echo " "
-echo "Getting feeders"
-feeders=$(get_fdr)
-
-echo " "
-echo $feeders
-echo $feeders >> $log
-echo " "
-
-json=$(cat input.json)
-items=$(echo $json | jq '.[] | length')
-for i in {0..8}; do
-  fdr=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdr' | sed 's/"//g')
-  fdrid=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdrid' | sed 's/"//g')
-  echo " "
-  echo "Verifying: $fdr $fdrid"
-
-  ref_capacitors=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].capacitors')
-  ref_houses=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].houses')
-
-  capacitors=$(get_capacitors $fdrid)
-  houses=$(get_houses $fdrid)
-
-  if [ $ref_capacitors -ne $capacitors ]; then
-    echo "  Error: capacitors expected: $ref_capacitors found: $capacitors"
-  else
-    echo "  capacitors expected: $ref_capacitors found: $capacitors"
-  fi
-  if [ $ref_houses -ne $houses ]; then
-    echo "  Error: houses expected: $ref_houses found: $houses"
-  else
-    echo "  houses expected: $ref_houses found: $houses"
-  fi
-  get_breakers $fdrid
-
-  echo "${fdr}:${fdrid}:cap:${ref_capacitors}:${capacitors}:houses:${ref_houses}:${houses}" >> $logfile
-done
+get_query 
 
 echo " "
 echo "Stopping blazegraph container"
