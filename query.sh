@@ -66,8 +66,8 @@ ORDER BY ?cimtype ?name"
  
   curl -s -X POST $endpoint --data-urlencode "query=$query" \
        -H 'Accept:application/json' \
-       | jq '.results '
-       #| jq '.results | .bindings[] | .name | .value' | wc -l
+       | jq '.results | .bindings[] | .name | .value' | wc -l
+       #| jq '.results '
 }
 
 
@@ -230,16 +230,21 @@ feeders=$(get_fdr)
 
 echo " "
 echo $feeders
-echo $feeders >> $log
+
+feedercount=$(echo $feeders | wc -w )
+((feedercount=feedercount-1))
+echo $feedercount
+echo $feeders >> $logfile
 echo " "
 
 json=$(cat input.json)
 items=$(echo $json | jq '.[] | length')
-for i in {0..8}; do
+#for i in {0..8}; do
+for i in $(seq 0 $feedercount); do
   fdr=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdr' | sed 's/"//g')
   fdrid=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdrid' | sed 's/"//g')
   echo " "
-  echo "Verifying: $fdr $fdrid"
+  echo "Verifying: $i $fdr $fdrid"
 
   ref_capacitors=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].capacitors')
   ref_houses=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].houses')
@@ -247,19 +252,20 @@ for i in {0..8}; do
   capacitors=$(get_capacitors $fdrid)
   houses=$(get_houses $fdrid)
 
-  if [ $ref_capacitors -ne $capacitors ]; then
-    echo "  Error: capacitors expected: $ref_capacitors found: $capacitors"
-  else
-    echo "  capacitors expected: $ref_capacitors found: $capacitors"
-  fi
-  if [ $ref_houses -ne $houses ]; then
-    echo "  Error: houses expected: $ref_houses found: $houses"
-  else
-    echo "  houses expected: $ref_houses found: $houses"
-  fi
-  get_breakers $fdrid
+#  if [ $ref_capacitors -ne $capacitors ]; then
+#    echo "  Error: capacitors expected: $ref_capacitors found: $capacitors"
+#  else
+#    echo "  capacitors expected: $ref_capacitors found: $capacitors"
+#  fi
+#  if [ $ref_houses -ne $houses ]; then
+#    echo "  Error: houses expected: $ref_houses found: $houses"
+#  else
+#    echo "  houses expected: $ref_houses found: $houses"
+#  fi
+  breakers=$(get_breakers $fdrid)
 
-  echo "${fdr}:${fdrid}:cap:${ref_capacitors}:${capacitors}:houses:${ref_houses}:${houses}" >> $logfile
+  echo "${fdr}:${fdrid}:cap:${ref_capacitors}:${capacitors}:houses:${ref_houses}:${houses}:breakers:${breakers}"
+  echo "${fdr}:${fdrid}:cap:${ref_capacitors}:${capacitors}:houses:${ref_houses}:${houses}:breakers:${breakers}" >> $logfile
 done
 
 echo " "
