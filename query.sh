@@ -6,19 +6,23 @@ docker_image=$1
 
 [ ! -d log ] && mkdir log
 
-logfile=log/$( echo $docker_image | sed 's:/:_:g').log.$$
+logfile=~/git/bz-test/log/$( echo $docker_image | sed 's:/:_:g').log.$$
 touch $logfile
 
-fdrs=" ieee123 _C1C3E687-6FFD-C753-582B-632A27E28507 \n
-ieee123pv _E407CBB6-8C8D-9BC9-589C-AB83FBF0826D \n
-ieee13nodeckt _49AD8E07-3BF9-A4E2-CB8F-C3722F837B62 \n
-ieee13nodecktassets _5B816B93-7A5F-B64C-8460-47C17D6E4B0F \n
-ieee8500 _4F76A5F9-271D-9EB8-5E31-AA362D86F2C3 \n
-j1 _67AB291F-DCCD-31B7-B499-338206B9828F \n
-ieee123transactive _503D6E20-F499-4CC7-8051-971E23D0BF79 \n
-test9500new _AAE94E4A-2465-6F5E-37B1-3E72183A4E44 \n
-acep_psil _77966920-E1EC-EE8A-23EE-4EFD23B205BD \n
-sourceckt _9CE150A8-8CC5-A0F9-B67E-BBD8C79D3095 "
+cat << EOF  > /tmp/fdrs
+ieee123 _C1C3E687-6FFD-C753-582B-632A27E28507
+ieee123pv _E407CBB6-8C8D-9BC9-589C-AB83FBF0826D
+ieee13nodeckt _49AD8E07-3BF9-A4E2-CB8F-C3722F837B62
+ieee13nodecktassets _5B816B93-7A5F-B64C-8460-47C17D6E4B0F
+ieee13ochre _13AD8E07-3BF9-A4E2-CB8F-C3722F837B62
+ieee8500 _4F76A5F9-271D-9EB8-5E31-AA362D86F2C3
+j1 _67AB291F-DCCD-31B7-B499-338206B9828F
+ieee123transactive _503D6E20-F499-4CC7-8051-971E23D0BF79
+final9500node _EE71F6C9-56F0-4167-A14E-7F4C71F10EAA
+test9500new _AAE94E4A-2465-6F5E-37B1-3E72183A4E44
+acep_psil _77966920-E1EC-EE8A-23EE-4EFD23B205BD
+sourceckt _9CE150A8-8CC5-A0F9-B67E-BBD8C79D3095
+EOF
 
 #  Generating measurements files for ieee123 _C1C3E687-6FFD-C753-582B-632A27E28507
 #  Generating measurements files for ieee123pv _E407CBB6-8C8D-9BC9-589C-AB83FBF0826D
@@ -120,7 +124,7 @@ VALUES ?fdrid {\"${myfdrid}\"}
 ORDER by ?name"
  
   curl -s -X POST $endpoint --data-urlencode "query=$query" \
-       -H 'Accept:application/json' \
+      -H 'Accept:application/json' \
        | jq '.results | .bindings[] | .name | .value' | wc -l
 }
 
@@ -148,7 +152,8 @@ ORDER by ?feeder"
 
   curl -s -X POST $endpoint --data-urlencode "query=$query" \
        -H 'Accept:application/json' \
-       | jq '.results | .bindings[] | .fid | .value'  
+       | jq '.results | .bindings[] | .fid | .value' | sed 's/"//g'  
+       #| jq '.results | .bindings[] | .feeder + " " + .fid ' | sed 's/"//g'  
 
 }
 
@@ -159,7 +164,7 @@ query="
 # list houses - DistHouse
 PREFIX r:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX c:  <http://iec.ch/TC57/CIM100#>
-SELECT ?name 
+SELECT ?fdrname ?name ?parent
 WHERE { 
         VALUES ?fdrid {\"${myfdrid}\"}
    ?h r:type c:House.
@@ -218,7 +223,8 @@ did=$( docker run --rm -d -p $port:8080 $docker_image )
 echo "Waiting for blazegraph startup"
 sleep 30
 
-endpoint="http://localhost:$port/bigdata/sparql"
+#endpoint="http://localhost:$port/bigdata/sparql"
+endpoint="http://localhost:$port/bigdata/namespace/kb/sparql"
 
 rangeCount=`curl -s -G -H 'Accept: application/xml' "${endpoint}" --data-urlencode ESTCARD | sed 's/.*rangeCount=\"\([0-9]*\)\".*/\1/'`
 echo " "
@@ -229,7 +235,7 @@ echo "Getting feeders"
 feeders=$(get_fdr)
 
 echo " "
-echo $feeders
+echo $feeders 
 
 feedercount=$(echo $feeders | wc -w )
 ((feedercount=feedercount-1))
@@ -237,36 +243,30 @@ echo $feedercount
 echo $feeders >> $logfile
 echo " "
 
-json=$(cat input.json)
+json=$(cat ~/git/bz-test/input.json)
 items=$(echo $json | jq '.[] | length')
 #for i in {0..8}; do
-for i in $(seq 0 $feedercount); do
-  fdr=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdr' | sed 's/"//g')
-  fdrid=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdrid' | sed 's/"//g')
-  echo " "
-  echo "Verifying: $i $fdr $fdrid"
+#for i in $(seq 0 $feedercount); do
+for fdrid in $feeders ; do 
+#  fdr=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdr' | sed 's/"//g')
+#  fdrid=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].fdrid' | sed 's/"//g')
+  #echo " "
+  #echo "Verifying: $i $fdr $fdrid"
 
-  ref_capacitors=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].capacitors')
-  ref_houses=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].houses')
+  #ref_capacitors=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].capacitors')
+  #ref_houses=$(echo $json | jq --argjson INDEX "$i" '.fdrs[$INDEX].houses')
+
+
+  fdr=$( grep $fdrid /tmp/fdrs | awk '{print $1}')
 
   capacitors=$(get_capacitors $fdrid)
   houses=$(get_houses $fdrid)
-
-#  if [ $ref_capacitors -ne $capacitors ]; then
-#    echo "  Error: capacitors expected: $ref_capacitors found: $capacitors"
-#  else
-#    echo "  capacitors expected: $ref_capacitors found: $capacitors"
-#  fi
-#  if [ $ref_houses -ne $houses ]; then
-#    echo "  Error: houses expected: $ref_houses found: $houses"
-#  else
-#    echo "  houses expected: $ref_houses found: $houses"
-#  fi
   breakers=$(get_breakers $fdrid)
 
-  echo "${fdr}:${fdrid}:cap:${ref_capacitors}:${capacitors}:houses:${ref_houses}:${houses}:breakers:${breakers}"
+  #echo "${fdr}:${fdrid}:cap:${ref_capacitors}:${capacitors}:houses:${ref_houses}:${houses}:breakers:${breakers}"
+  echo "${fdr}:${fdrid}:cap:${capacitors}:houses:${houses}:breakers:${breakers}"
   echo "${fdr}:${fdrid}:cap:${ref_capacitors}:${capacitors}:houses:${ref_houses}:${houses}:breakers:${breakers}" >> $logfile
-done
+done 
 
 echo " "
 echo "Stopping blazegraph container"
